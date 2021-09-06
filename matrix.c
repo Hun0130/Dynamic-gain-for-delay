@@ -482,20 +482,20 @@ void update_state(struct Matrix A, struct Matrix *x, struct Matrix B, double u){
 
 }
 
+// update y = Cx + D
 double update_y(struct Matrix C, struct Matrix *x){
   double y;
   struct Matrix y_mat;
-  y_mat=mat_mul(C,*x);
-  y=y_mat.mat[0][0];
-
+  y_mat = mat_mul(C,*x);
+  y = y_mat.mat[0][0];
   return y;
 }
 
 double update_u(struct Matrix K, struct Matrix *x_hat){
   double u;
   struct Matrix u_mat;
-  u_mat=mat_mul(K,*x_hat);
-  u=u_mat.mat[0][0];
+  u_mat = mat_mul(K, *x_hat);
+  u = u_mat.mat[0][0];
 
   return -u;
 }

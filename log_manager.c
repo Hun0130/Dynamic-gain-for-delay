@@ -1,5 +1,5 @@
 #include "log_manager.h"
- 
+
 void Make_file_name(char* fhead, char* fname){	
 	time_t t = time(NULL);
     struct tm tm = *localtime(&t);
@@ -35,11 +35,11 @@ int main(void){
 	}
 	
 	write(fd,file_name,strlen(file_name));
-		  
+	
     printf("%s\n",file_name);
 	close(fd);
-			 
+	
 	return 0;
- }
+}
 */
 

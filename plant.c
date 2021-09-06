@@ -59,7 +59,7 @@ struct State_Handler{
 
 struct State_Handler plant; 
 
-// simulation time (sec)
+// simulation time (ms)
 double sim_time = 0;
 // simulation counter
 int sim_count = 1;
@@ -110,20 +110,29 @@ int createTimer(timer_t *timerID, int sec, int msec)
 
 /*	Timer for real-time physical process.
 	This function is operated only Linux OS because this code use Linux system functions.
-	This function is called for every period (can set with createTimer()) */
+	This function is called for every period (can set with createTimer()) 
+	Now, period is 1ms(MSEC) */
 void timer()
 {
-	// Sensor value buffer
-	unsigned char sensor_value[50]={0,};		
+	// origin: unsigned char sensor_value[50]={0,};	(Sensor value buffer)
+	// State1 value buffer
+	char state1_buffer[50] = {0,};
+	// State2 value buffer
+	char state2_buffer[50] = {0,};
 	// Tx buffer (will be transmitted) (BUFFER_SIZE : 1024)
 	unsigned char Tx[BUFFER_SIZE];
 	memset(Tx, 0, sizeof(Tx));
 	// Header creation buffer(HEADERLEN: 7)
 	unsigned char Header[HEADERLEN];
-	int len;
-	int i;
+	// length of whole packet (state1 + '-' + state2)
+	int len; 
+	// length of state1_buffer
+	int len1; 
+	// length of state2_buffer
+	int len2;
 	char log_message[256];
 	// SAMPLING_PERIOD (s) should be unsigned int format.
+	// Now It's 2s
 	int sensing_period = (int) (SAMPLING_PERIOD * 1000);
 	
 	// ========================== Disturbance Code ===========================================
@@ -140,38 +149,50 @@ void timer()
 	sim_count++;				
 
 	// Print the current state x(t), y(t), and u(t)
-	printf("x(t): ")
-	mat_print(mat_transpose(*(plant.x))); )
+	printf("x(t): ");
+	mat_print(mat_transpose(*(plant.x)));
 	printf("y(t): %lf\t u(t): %lf\n", *(plant.y), *(plant.u));		
 	
 	// Update the phyiscla state x(t).
 	update_state(*(plant.sysA), plant.x, *(plant.sysB), *(plant.u));	
 	// Update the Senor output y(t).
-	*(plant.y)=update_y(*(plant.sysC), plant.x);
-	// Calculate the IAE.									
-	*(plant.IAE)+=abs_double(*(plant.ref_signal)-*(plant.y))*0.001;						
+	*(plant.y) = update_y(*(plant.sysC), plant.x);
+	// Calculate the IAE.							
+	*(plant.IAE) += abs_double(*(plant.ref_signal)-*(plant.y)) * 0.001;						
 	// ========================== Physical system State Update Code ==========================
 
-	// Sampling and transmiting the sensor output y(t) to controller.
-	if(sim_count%(sensing_period)==0){
-		// Transform sensor output from (double) to char[].
-		len=sprintf(sensor_value, "%lf", *(plant.y));
+	// Sampling and transmiting the sensor output y(t) to controller. (Every 2s)
+	if(sim_count % (sensing_period) == 0){
+		// origin : len = sprintf(sensor_value, "%lf", *(plant.y)); (Transform sensor output from (double) to char[].)
+		// Transform state1 output from (double) to char[].
+		len1 = sprintf(state1_buffer, "%lf", plant.x->mat[0][0]);
+		// Transform state2 output from (double) to char[])
+		len2 = sprintf(state2_buffer, "%lf", plant.x->mat[1][0]);
+		len = len1 + len2 + 1;
 		// Make header.											
-		make_protocol(Header,len,packet_seq,2);													
+		make_protocol(Header, len, packet_seq ,2);													
 		
-		//	Fill the transmission buffer Tx[] with header and sensor output y(t).	
-		for(i=0; i<HEADERLEN; i++)
-			Tx[i]=Header[i];
-		for(i=0; i<strlen(sensor_value); i++)
-			Tx[HEADERLEN+i]=sensor_value[i];
-		
-		// Send the sensor output y(t) to controller.
-		sendto(sock, Tx, strlen(sensor_value)+HEADERLEN, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
-		packet_seq++;
+		// Fill the transmission buffer Tx[] with header and state x_0 and x_1.	
+		for(int i = 0; i < HEADERLEN; i++)
+			Tx[i] = Header[i];
+		for(int i = 0; i < len; i++){
+			if(i < len1){
+				Tx[HEADERLEN + i] = state1_buffer[i];
+			}
+			if(i == len1){
+				Tx[HEADERLEN + i] = '-'; 
+			}
+			if(i > len1){
+				Tx[HEADERLEN + i] = state2_buffer[i - len1 - 1];
+			}
+		}
+		// Send the state output to controller. (state1-state2)
+		sendto(sock, Tx, len + HEADERLEN, 0, (struct sockaddr*) & server_addr, sizeof(server_addr));
+		packet_seq ++;
 	}
 	// Log file writing
-	sprintf(log_message,"%lf\t%lf\t%lf\n",sim_time, *(plant.y) ,*(plant.u));
-	write(fd,log_message,strlen(log_message));
+	sprintf(log_message, "%lf\t%lf\t%lf\n", sim_time, *(plant.y), *(plant.u));
+	write(fd,log_message, strlen(log_message));
 }
 
 //Main fuction
@@ -179,10 +200,12 @@ int main(int argc, char* argv[]){
 	printf("Start Plant\n");
 	// ===================================== Plant Setting =======================================
 	// Matrix Setting
-	// A = [ 1  0 ]  	B  = [ 0 ]   C = [ 1 0 ]
-	//     [ 0  1 ]		   = [ 1 ]
-	double A[DIMENSION][DIMENSION]={{1, 0}, {0, 1}};
-	double B[DIMENSION][1]={{0}, {1}};
+	// A = [ 0  1        ]  B  = [ 0 ]   C = [ 1 0 ]
+	//     [ 0  -41.5769 ]     = [ 384.615 ]
+	// K = [ 0.75, 0.023]
+	// t_s = 0.1s (100ms)
+	double A[DIMENSION][DIMENSION]={{0, 1}, {0, -41.5769}};
+	double B[DIMENSION][1]={{0}, {384.615}};
 	double C[1][DIMENSION]={1, 0};
 
 	struct Matrix sysA;   sysA = Init_Mat(DIMENSION,DIMENSION,A);	plant.sysA = &sysA;
@@ -196,8 +219,8 @@ int main(int argc, char* argv[]){
 	// Initial sensor output = 0 
 	double y = 0;	plant.y = &y;
 
-	// Simulation end at 25
-	double Sim_end = 25;	
+	// Simulation end at 30s
+	double sim_end = 30;	
 	// Current time 
 	int current_time = 0;
 
@@ -213,7 +236,7 @@ int main(int argc, char* argv[]){
 	// x0 = [ 1 ]
 	//	  = [ 1 ]
 	double x0[DIMENSION][1]={{1}, {1}};	
-	struct Matrix x;  x=Init_Mat(DIMENSION,1,x0);	plant.x=&x;
+	struct Matrix x;  x = Init_Mat(DIMENSION,1,x0);	plant.x = &x;
 	
 	// Set Integration of absolute error
 	double IAE = 0;		plant.IAE=&IAE;			
@@ -256,48 +279,42 @@ int main(int argc, char* argv[]){
 	char file_name[256];
 	Make_file_name("plant", file_name);
 	
-	if(0>(fd=open(file_name,O_WRONLY|O_CREAT|O_EXCL,0644))){
-		perror("File open error\n");
+	if( 0 > (fd = open(file_name,O_WRONLY|O_CREAT|O_EXCL, 0644))){
+		perror("Log File open error\n");
 		exit(0);
 	}
 	// ===================================== Logging Setting =====================================
 
-	// Start the physical processing of plant
-	// If you want to modify the sensor packet transmission process, please see the function timer() below the main()
+	// ===================================== Start Physical Process ==============================
 	timer_t timerID;
+	// Modify SEC and MSEC to change plant update period (now It's 1ms)
 	createTimer(&timerID, SEC, MSEC);
 
 	int message_len = 0;
-
-
-	/*
-		Update control input signal u(t)
-
-	*/
-
-
-	while(sim_time<Sim_end){ //Operate until the end of simulation
-
-		message_len = recvfrom(sock, buff_rcv, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr,&client_addr_size); // Wait the enter of control input u(t).
-		
-		if(message_len>0 || buff_rcv[HEADERLEN-1]==ACTUATOR){	// If entered packet is actuator packet.
-
-			for(i=0; i<message_len-HEADERLEN; i++){
-				actuator_val[i]=buff_rcv[HEADERLEN+i];			// Parse the control input signal u(t) from the packet. 
+	// Operate until the end of simulation
+	while(sim_time < sim_end){ 
+		// Wait the enter of control input u(t).
+		message_len = recvfrom(sock, buff_rcv, BUFFER_SIZE, 0, (struct sockaddr*) & client_addr, &client_addr_size);
+		// If entered packet is actuator packet.
+		if(message_len > 0 || buff_rcv[HEADERLEN - 1] == ACTUATOR){	
+			for(int i = 0; i < message_len - HEADERLEN; i++){
+				// Parse the control input signal u(t) from the packet. 
+				actuator_val[i] = buff_rcv[HEADERLEN+i];			
 			}
-
-			u=atof(actuator_val);	// Update the control input u(t).
+			// Update the control input u(t).
+			u = atof(actuator_val);	
 		}
-
-
 	}
-	sendto(sock, end_char, strlen(end_char)+1, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));// Send kill signal to controller. 
-	close(sock);// Close the socket.
-
+	// Send kill signal to controller.
+	sendto(sock, end_char, strlen(end_char)+1, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)); 
+	// Close the socket.
+	close(sock);
+	
 	// Return the memory for physical system
 	Matrix_free(sysA); Matrix_free(sysB);  Matrix_free(sysC);  Matrix_free(x);
 	printf("Integral of the Absolute Error (IAE)= %lf \n", IAE);
-	
-	close(fd);	// Log file close.
+
+	// Log file close.
+	close(fd);	
 	return 0;
 }
