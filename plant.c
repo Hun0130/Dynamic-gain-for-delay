@@ -12,25 +12,9 @@
 // period (ms)
 #define MSEC 1
 
-
+// Declare
 void timer();
 int createTimer( timer_t *timerID, int sec, int msec );
-
-// structure for network environment setting
-struct Environment_Setting{
-	// simulation end
-	double* Sim_end;
-	// server address 
-	struct sockaddr_in* server_addr;
-	// client address
-	struct sockaddr_in* client_addr;
-	// socket pointer
-	int* sock;
-	// size of server address
-	int* server_addr_size;
-	// size of client address
-	int* client_addr_size;
-};
 
 // structure for state equation x'(t)= Ax(t) + Bu(t), y(t) = Cx(t) + Du(t) (D = 0)
 struct State_Handler{
@@ -59,6 +43,22 @@ struct State_Handler{
 
 struct State_Handler plant; 
 
+// structure for network environment setting
+struct Environment_Setting{
+	// simulation end
+	double* Sim_end;
+	// server address 
+	struct sockaddr_in* server_addr;
+	// client address
+	struct sockaddr_in* client_addr;
+	// socket pointer
+	int* sock;
+	// size of server address
+	int* server_addr_size;
+	// size of client address
+	int* client_addr_size;
+};
+
 // simulation time (ms)
 double sim_time = 0;
 // simulation counter
@@ -71,7 +71,7 @@ struct sockaddr_in server_addr, client_addr;
 int sock, server_addr_size, client_addr_size;
 
 // File descriptor to make log file
-int fd;											
+int fd;					
 
 // timer var, second, ms
 int createTimer(timer_t *timerID, int sec, int msec)  
@@ -145,14 +145,14 @@ void timer()
 	// ========================== Physical system State Update Code ==========================
 	// Time update (1ms).
 	printf("t: %lf\t", sim_time); 
-	sim_time = sim_time + (MSEC % 1000);	
-	sim_count++;				
+	sim_time = sim_time + (MSEC * 0.001);	
+	sim_count = sim_count + 1;				
 
 	// Print the current state x(t), y(t), and u(t)
 	printf("x(t): ");
 	mat_print(mat_transpose(*(plant.x)));
 	printf("y(t): %lf\t u(t): %lf\n", *(plant.y), *(plant.u));		
-	
+
 	// Update the phyiscla state x(t).
 	update_state(*(plant.sysA), plant.x, *(plant.sysB), *(plant.u));	
 	// Update the Senor output y(t).
@@ -162,7 +162,7 @@ void timer()
 	// ========================== Physical system State Update Code ==========================
 
 	// Sampling and transmiting the sensor output y(t) to controller. (Every 2s)
-	if(sim_count % (sensing_period) == 0){
+	if((sim_count % sensing_period) == 0){
 		// origin : len = sprintf(sensor_value, "%lf", *(plant.y)); (Transform sensor output from (double) to char[].)
 		// Transform state1 output from (double) to char[].
 		len1 = sprintf(state1_buffer, "%lf", plant.x->mat[0][0]);
@@ -195,7 +195,8 @@ void timer()
 	write(fd,log_message, strlen(log_message));
 }
 
-//Main fuction
+
+// Main fuction
 int main(int argc, char* argv[]){
 	printf("Start Plant\n");
 	// ===================================== Plant Setting =======================================
@@ -206,7 +207,7 @@ int main(int argc, char* argv[]){
 	// t_s = 0.1s (100ms)
 	double A[DIMENSION][DIMENSION]={{0, 1}, {0, -41.5769}};
 	double B[DIMENSION][1]={{0}, {384.615}};
-	double C[1][DIMENSION]={1, 0};
+	double C[1][DIMENSION]={1, 1};
 
 	struct Matrix sysA;   sysA = Init_Mat(DIMENSION,DIMENSION,A);	plant.sysA = &sysA;
 	struct Matrix sysB;   sysB = Init_Mat(DIMENSION,1,B);	        plant.sysB = &sysB;
@@ -229,7 +230,7 @@ int main(int argc, char* argv[]){
 		disturbance_time: Disturbance start time;
 		disturbance_value: Amplitude of disturbance [Not disturbance-> set 0]; 	*/
 
-	double disturbance_time = 10; 	    plant.disturbance_time = &disturbance_time; 	
+	double disturbance_time = 0; 	    plant.disturbance_time = &disturbance_time; 	
 	double disturbance_value = 0;		plant.disturbance_value = &disturbance_value;
 
 	// Initial state of the physical system.
@@ -309,7 +310,7 @@ int main(int argc, char* argv[]){
 	sendto(sock, end_char, strlen(end_char)+1, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)); 
 	// Close the socket.
 	close(sock);
-	
+
 	// Return the memory for physical system
 	Matrix_free(sysA); Matrix_free(sysB);  Matrix_free(sysC);  Matrix_free(x);
 	printf("Integral of the Absolute Error (IAE)= %lf \n", IAE);
