@@ -1,0 +1,39 @@
+1. Compile this program.
+
+make
+
+
+2. controller.out: controller exe file.
+
+./controller.out
+
+	- print sequence (4 column)
+
+	time | sensor y(t) | control input u(t) | residual r(t)
+
+
+3. plant.out: plant exe file.
+
+./plant.out
+
+	- print sequence (7 column)
+
+	time | State x0, x1, x2, x3 | sensor y(t) | control input u(t)
+
+
+4. Check the log.
+
+	a) controller log file sequence
+
+	- time | sensor y(t) | control input u(t) | residual r(t)
+	
+	b) plant log file sequence
+	- time | sensor y(t) | control input u(t)
+
+
+*Please do not remove 'log_plant' and 'log_controller' directory.
+
+*When you want to modify this program, please 'make clean' before 'make'.
+- make clean
+
+
