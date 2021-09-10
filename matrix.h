@@ -8,7 +8,7 @@
 #define DIMENSION 2
 #define NUM_INPUT 1
 #define NUM_OUTPUT 1
-#define SAMPLING_PERIOD 0.2
+#define SAMPLING_PERIOD 0.1
 #define EPSILON 0.000001
 #define DELTA 0.001
 

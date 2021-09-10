@@ -7,10 +7,12 @@
 #include <sys/time.h>
 #define GET_TIME(t) gettimeofday(t, NULL);
 #define ELAPS_TIME(e, s) (e.tv_sec + e.tv_usec/1000000.0) - (s.tv_sec + s.tv_usec/1000000.0)
-struct timeval gstart, gend;
+// save micro second value
+struct timeval past; struct timeval now;
+struct timeval time_val;
 
 // u = -Kx + U_c
-#define UC 1
+#define UC 0
 
 // structure for state equation x'(t)= Ax(t) + Bu(t), y(t) = Cx(t) + Du(t) (D = 0)
 struct State_Handler{
@@ -120,12 +122,14 @@ int main(){
 
 	while(1){
 		client_addr_size = sizeof(client_addr);
-		// Measure time to start
-		GET_TIME(&gstart);
 		// Wait the control input signal.
 		len = recvfrom(sock, buff_rcv, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, &client_addr_size);	
-		// Measure time to finish
-		GET_TIME(&gend);
+		// Measure time
+		GET_TIME(&time_val);
+		// update past time
+		past = now;
+		// Save now time
+		now = time_val;
 		// If the controller receive the kill signal from the physical system, controller must shut down the program. 
 		if(!strncmp(buff_rcv,"kill", 4)){
 			printf("%s\n",buff_rcv);
@@ -160,9 +164,9 @@ int main(){
 			// Calculate the control input u(t)
 			u = -K1 * x1 - K2 * x2 + UC;
 			
-			printf("time: %lf\t u(t): %lf\t delay(us): %.6f\n", seq * SAMPLING_PERIOD, u, ELAPS_TIME(gend, gstart));
+			printf("time: %lf\t u(t): %lf\t delay(us): %f\n", seq * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
 			// Write the log (Time, y(t), u(t), r(t) -> Residual)
-			sprintf(log_message,"%lf\t%lf\t%.6f\n", seq * SAMPLING_PERIOD, u, ELAPS_TIME(gend, gstart));
+			sprintf(log_message,"%lf\t%lf\t%f\n", seq * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
 			write(fd,log_message, strlen(log_message));
 			
 			// Transform control input u(t) from (double) to char[]
