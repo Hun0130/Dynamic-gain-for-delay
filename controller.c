@@ -1,12 +1,15 @@
 #include "matrix.h"
 #include "udp_protocol.h"
 #include "log_manager.h"
+
 // micro second measurement
 #include <time.h>
+#include <sys/time.h>
 #define GET_TIME(t) gettimeofday(t, NULL);
 #define ELAPS_TIME(e, s) (e.tv_sec + e.tv_usec/1000000.0) - (s.tv_sec + s.tv_usec/1000000.0)
 struct timeval gstart, gend;
 
+// u = -Kx + U_c
 #define UC 1
 
 // structure for state equation x'(t)= Ax(t) + Bu(t), y(t) = Cx(t) + Du(t) (D = 0)
@@ -159,7 +162,7 @@ int main(){
 			
 			printf("time: %lf\t u(t): %lf\t delay(us): %.6f\n", seq * SAMPLING_PERIOD, u, ELAPS_TIME(gend, gstart));
 			// Write the log (Time, y(t), u(t), r(t) -> Residual)
-			sprintf(log_message,"%lf\t%lf\n", seq * SAMPLING_PERIOD, u);
+			sprintf(log_message,"%lf\t%lf\t%.6f\n", seq * SAMPLING_PERIOD, u, ELAPS_TIME(gend, gstart));
 			write(fd,log_message, strlen(log_message));
 			
 			// Transform control input u(t) from (double) to char[]

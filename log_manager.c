@@ -6,7 +6,7 @@ void Make_file_name(char* fhead, char* fname){
 
 	char log_head[256] = "log_";
 	//char head[256] = "log_plant/plant_";
-	char head[256];
+	char head[512];
 	char body[256];
 	char tail[5] = ".txt";
 	
