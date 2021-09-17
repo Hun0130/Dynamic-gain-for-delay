@@ -44,9 +44,9 @@ int main(){
 	int iter = 10;
 
 	// Controller gain
-	double K1 = 0.75;
-	double K2 = 0.023;
-	double Kd[1][DIMENSION] = {0.75, 0.023};
+	double K1 = 0.0659;
+	double K2 = -0.0583;
+	double Kd[1][DIMENSION] = {K1, K2};
 
 	double u = 0;	plant.u = &u;
 	double y = 0;	plant.y = &y;
@@ -166,8 +166,11 @@ int main(){
 			
 			printf("time: %lf\t u(t): %lf\t delay(us): %f\n", seq * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
 			// Write the log (Time, y(t), u(t), r(t) -> Residual)
-			sprintf(log_message,"%lf\t%lf\t%f\n", seq * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
-			write(fd,log_message, strlen(log_message));
+			// If delay is more than 10s, do not log
+			if (ELAPS_TIME(now, past) < 10.0){
+				sprintf(log_message,"%lf\t%lf\t%f\n", (seq - 1) * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
+				write(fd,log_message, strlen(log_message));
+			}
 			
 			// Transform control input u(t) from (double) to char[]
 			u_len = sprintf(u_value, "%.6lf", u);
