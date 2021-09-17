@@ -180,7 +180,7 @@ void timer()
 				Tx[HEADERLEN + i] = state1_buffer[i];
 			}
 			if(i == len1){
-				Tx[HEADERLEN + i] = '-'; 
+				Tx[HEADERLEN + i] = '%'; 
 			}
 			if(i > len1){
 				Tx[HEADERLEN + i] = state2_buffer[i - len1 - 1];
@@ -272,8 +272,8 @@ int main(int argc, char* argv[]){
 	// 16bit PORT NUM = Controller UDP port = 4000
 	// htons() : host byte order -> network byte order,  ntohs : network byte order -> host byte order
 	server_addr.sin_port = htons(SERVER_PORT);	
-	// controller 32bit IPv4 address : 127.0.0.1
-	server_addr.sin_addr.s_addr	= inet_addr("127.0.0.1");
+	// controller 32bit IPv4 address : 127.0.0.1	192.168.0.6
+	server_addr.sin_addr.s_addr	= inet_addr("192.168.0.6");
 	// ===================================== Network Setting =====================================
 	
 	// ===================================== Logging Setting =====================================

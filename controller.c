@@ -1,6 +1,7 @@
 #include "matrix.h"
 #include "udp_protocol.h"
 #include "log_manager.h"
+#include "queue.h"
 
 // micro second measurement
 #include <time.h>
@@ -13,6 +14,9 @@ struct timeval time_val;
 
 // u = -Kx + U_c
 #define UC 0
+
+// delay Queue size: 5
+QueueType delay_queue;
 
 // structure for state equation x'(t)= Ax(t) + Bu(t), y(t) = Cx(t) + Du(t) (D = 0)
 struct State_Handler{
@@ -37,6 +41,8 @@ double delay = 0;
 
 // Main fuction
 int main(){
+	// delay queue init
+	init_queue(&delay_queue);
 
 	// ================== Controller setting ===================
 
@@ -144,7 +150,7 @@ int main(){
 				// Get sequence of the sensor packet. (Redundant check)
 				seq = (unsigned int)buff_rcv[4] * 256 + (unsigned int)buff_rcv[5]; 	
 				for(int i = 0; i < len - HEADERLEN; i++){
-					if (buff_rcv[HEADERLEN+i] == '-'){
+					if (buff_rcv[HEADERLEN+i] == '%'){
 						check = 1;
 						continue;
 					}
@@ -164,10 +170,11 @@ int main(){
 			// Calculate the control input u(t)
 			u = -K1 * x1 - K2 * x2 + UC;
 			
-			printf("time: %lf\t u(t): %lf\t delay(us): %f\n", sim_time * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
 			// Write the log (Time, y(t), u(t), r(t) -> Residual)
 			// If delay is more than 10s, do not log
 			if (ELAPS_TIME(now, past) < 10.0){
+				enqueue(&delay_queue, ELAPS_TIME(now, past));
+				printf("time: %lf\t u(t): %lf\t delay(s): %f\t x1(t): %f\t x2(t): %f delay sum: %f\n", (sim_time - 1) * SAMPLING_PERIOD, u, ELAPS_TIME(now, past), x1, x2, sum_queue(&delay_queue));
 				sprintf(log_message,"%lf\t%lf\t%f\n", (sim_time - 1) * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
 				write(fd,log_message, strlen(log_message));
 			}
