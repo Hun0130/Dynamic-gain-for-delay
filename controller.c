@@ -164,11 +164,11 @@ int main(){
 			// Calculate the control input u(t)
 			u = -K1 * x1 - K2 * x2 + UC;
 			
-			printf("time: %lf\t u(t): %lf\t delay(us): %f\n", seq * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
+			printf("time: %lf\t u(t): %lf\t delay(us): %f\n", sim_time * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
 			// Write the log (Time, y(t), u(t), r(t) -> Residual)
 			// If delay is more than 10s, do not log
 			if (ELAPS_TIME(now, past) < 10.0){
-				sprintf(log_message,"%lf\t%lf\t%f\n", (seq - 1) * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
+				sprintf(log_message,"%lf\t%lf\t%f\n", (sim_time - 1) * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
 				write(fd,log_message, strlen(log_message));
 			}
 			
@@ -176,6 +176,7 @@ int main(){
 			u_len = sprintf(u_value, "%.6lf", u);
 			// Make protocol header.
 			make_protocol(Header, u_len, seq, 1); seq++;	
+			sim_time = sim_time + 1.0;
 			
 			// Write header to send buffer.
 			for(int i = 0; i < HEADERLEN; i++){						
