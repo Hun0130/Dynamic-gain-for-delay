@@ -4,6 +4,7 @@
 #include "log_manager.h"
 #include <time.h>
 #include <signal.h>
+#include <stdlib.h>
 
 // port number of server
 #define SERVER_PORT 4000
@@ -309,10 +310,11 @@ int main(int argc, char* argv[]){
 	while(sim_time < sim_end){ 
 		// Wait the enter of control input u(t).
 		message_len = recvfrom(sock, buff_rcv, BUFFER_SIZE, 0, (struct sockaddr*) & client_addr, &client_addr_size);
-		if(!strncmp(buff_rcv,"delay", 5)){
+		if(!strncmp(buff_rcv, "delay", 5)){
 			ap_val = 0;
 			handover_check = handover_check + 1;
-
+			// Horizontal handover to "OpenWrt"
+			int ret = system("sudo nmcli device wifi connect OpenWrt");
 		}
 		// If entered packet is actuator packet.
 		if(message_len > 0 || buff_rcv[HEADERLEN - 1] == ACTUATOR){	

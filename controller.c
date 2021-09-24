@@ -17,7 +17,11 @@ struct timeval time_val;
 
 #define AP_NUM 1
 
-#define THREHOLD 0.41
+#define THREHOLD 0.5
+
+// Controller gain
+#define K1 0.0659
+#define K2 -0.0583
 
 // delay Queue size: 5
 QueueType delay_queue;
@@ -52,9 +56,6 @@ int main(){
 	printf("Start controller\n");	
 	int iter = 10;
 
-	// Controller gain
-	double K1 = 0.0659;
-	double K2 = -0.0583;
 	double Kd[1][DIMENSION] = {K1, K2};
 
 	double u = 0;	plant.u = &u;
