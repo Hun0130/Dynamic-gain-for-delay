@@ -12,6 +12,9 @@
 // period (ms)
 #define MSEC 1
 
+// Controller IP address : 127.0.0.1	192.168.0.6
+#define IP_ADDR "192.168.0.6"
+
 // Declare
 void timer();
 int createTimer( timer_t *timerID, int sec, int msec );
@@ -73,6 +76,12 @@ int sock, server_addr_size, client_addr_size;
 // File descriptor to make log file
 int fd;					
 
+// buffer for ap number in packet
+char ap_val = {1};
+
+// check which handover is made.
+char handover_check = {0};
+
 // timer var, second, ms
 int createTimer(timer_t *timerID, int sec, int msec)  
 {  
@@ -119,6 +128,8 @@ void timer()
 	char state1_buffer[50] = {0,};
 	// State2 value buffer
 	char state2_buffer[50] = {0,};
+	// AP value buffer
+	char ap_buffer[3] = {0, };
 	// Tx buffer (will be transmitted) (BUFFER_SIZE : 1024)
 	unsigned char Tx[BUFFER_SIZE];
 	memset(Tx, 0, sizeof(Tx));
@@ -132,7 +143,7 @@ void timer()
 	int len2;
 	char log_message[256];
 	// SAMPLING_PERIOD (s) should be unsigned int format.
-	// Now It's 2s
+	// Now It's 1s
 	int sensing_period = (int) (SAMPLING_PERIOD * 1000);
 	
 	// ========================== Disturbance Code ===========================================
@@ -148,6 +159,8 @@ void timer()
 	sim_time = sim_time + (MSEC * 0.001);	
 	sim_count = sim_count + 1;				
 
+	// Print the AP number
+	printf("AP: %d\t", ap_val);
 	// Print the current state x(t), y(t), and u(t)
 	printf("x(t): ");
 	mat_print(mat_transpose(*(plant.x)));
@@ -191,7 +204,7 @@ void timer()
 		packet_seq ++;
 	}
 	// Log file writing
-	sprintf(log_message, "%lf\t%lf\t%lf\n", sim_time, *(plant.y), *(plant.u));
+	sprintf(log_message, "%lf\t%d\t%lf\t%lf\n", sim_time, ap_val, *(plant.y), *(plant.u));
 	write(fd,log_message, strlen(log_message));
 }
 
@@ -273,7 +286,7 @@ int main(int argc, char* argv[]){
 	// htons() : host byte order -> network byte order,  ntohs : network byte order -> host byte order
 	server_addr.sin_port = htons(SERVER_PORT);	
 	// controller 32bit IPv4 address : 127.0.0.1	192.168.0.6
-	server_addr.sin_addr.s_addr	= inet_addr("192.168.0.6");
+	server_addr.sin_addr.s_addr	= inet_addr(IP_ADDR);
 	// ===================================== Network Setting =====================================
 	
 	// ===================================== Logging Setting =====================================
@@ -296,14 +309,27 @@ int main(int argc, char* argv[]){
 	while(sim_time < sim_end){ 
 		// Wait the enter of control input u(t).
 		message_len = recvfrom(sock, buff_rcv, BUFFER_SIZE, 0, (struct sockaddr*) & client_addr, &client_addr_size);
+		if(!strncmp(buff_rcv,"delay", 5)){
+			ap_val = 0;
+			handover_check = handover_check + 1;
+
+		}
 		// If entered packet is actuator packet.
 		if(message_len > 0 || buff_rcv[HEADERLEN - 1] == ACTUATOR){	
 			for(int i = 0; i < message_len - HEADERLEN; i++){
-				// Parse the control input signal u(t) from the packet. 
+				// Parse the control input signal u(t) from the packet.
+				if (buff_rcv[HEADERLEN + i] == '%'){
+					if (handover_check != buff_rcv[HEADERLEN + i + 1]){
+						// Extract the ap number.
+						ap_val = buff_rcv[HEADERLEN + i + 1];
+						break;
+					}
+				}
 				actuator_val[i] = buff_rcv[HEADERLEN+i];			
 			}
 			// Update the control input u(t).
 			u = atof(actuator_val);	
+			
 		}
 	}
 	// Send kill signal to controller.

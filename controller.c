@@ -15,6 +15,10 @@ struct timeval time_val;
 // u = -Kx + U_c
 #define UC 0
 
+#define AP_NUM 1
+
+#define THREHOLD 0.41
+
 // delay Queue size: 5
 QueueType delay_queue;
 
@@ -35,9 +39,8 @@ struct State_Handler{
 };
 
 struct State_Handler plant;
+// use for simulation time check
 double sim_time = 0;
-int sim_count = 0;
-double delay = 0;
 
 // Main fuction
 int main(){
@@ -101,6 +104,9 @@ int main(){
 	char state2_val[50] = {0,};		
 	
 	unsigned int seq = 0;
+
+	// When simulation delay is more than threshold, Send a signal to the plant.
+	char delay_char[6] = "delay";	
 	
 	sock = socket(PF_INET,SOCK_DGRAM,0);
 	// Socket error
@@ -141,7 +147,6 @@ int main(){
 			printf("%s\n",buff_rcv);
 			break;
 		}
-
 		// When the controller receive the packet,
 		if(len > 0){
 			int check = 0;
@@ -174,15 +179,25 @@ int main(){
 			// If delay is more than 10s, do not log
 			if (ELAPS_TIME(now, past) < 10.0){
 				enqueue(&delay_queue, ELAPS_TIME(now, past));
-				printf("time: %lf\t u(t): %lf\t delay(s): %f\t x1(t): %f\t x2(t): %f delay sum: %f\n", (sim_time - 1) * SAMPLING_PERIOD, u, ELAPS_TIME(now, past), x1, x2, sum_queue(&delay_queue));
+				printf("time: %lf\t u(t): %lf\t delay(s): %f\t x1(t): %f\t x2(t): %f delay sum: %f\n", 
+					(sim_time - 1) * SAMPLING_PERIOD, u, ELAPS_TIME(now, past), x1, x2, sum_queue(&delay_queue));
 				sprintf(log_message,"%lf\t%lf\t%f\n", (sim_time - 1) * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
 				write(fd,log_message, strlen(log_message));
 			}
 			
+			// if delay sum is more than 2.0 seconds
+			if (sum_queue(&delay_queue) >= THREHOLD){
+				// Send delay signal to controller.
+				sendto(sock, delay_char, strlen(delay_char) + 1, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
+				printf("delay cut");
+				break;
+			}
+
 			// Transform control input u(t) from (double) to char[]
 			u_len = sprintf(u_value, "%.6lf", u);
-			// Make protocol header.
-			make_protocol(Header, u_len, seq, 1); seq++;	
+
+			// Make protocol header. format : [u(t)][%][ap number]
+			make_protocol(Header, u_len + 2, seq, 1); seq++;	
 			sim_time = sim_time + 1.0;
 			
 			// Write header to send buffer.
@@ -192,10 +207,12 @@ int main(){
 
 			// Write u(t) to send buffer.
 			for(int i = 0; i < u_len; i++){
-				buff_snd[HEADERLEN+i] = u_value[i];			
+				buff_snd[HEADERLEN + i] = u_value[i];			
 			}
+			buff_snd[HEADERLEN + u_len] = '%';
+			buff_snd[HEADERLEN + u_len + 1] = AP_NUM;
 			// Send control input signal u(t).
-			sendto(sock, buff_snd, HEADERLEN+u_len, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
+			sendto(sock, buff_snd, HEADERLEN + u_len + 2, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
 		}
 		len = 0;
 	}
