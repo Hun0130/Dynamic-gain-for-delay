@@ -17,7 +17,8 @@ struct timeval time_val;
 
 #define AP_NUM 1
 
-#define THREHOLD 0.5
+// THREHOLD (ms)
+#define THREHOLD 1000
 
 // Controller gain
 #define K1 0.0659
@@ -89,6 +90,7 @@ int main(){
 	int server_addr_size, client_addr_size;
 	struct sockaddr_in server_addr, client_addr;
 
+
 	// Receive buffer
 	unsigned char buff_rcv[BUFFER_SIZE];		
 	// Send buffer	
@@ -99,6 +101,10 @@ int main(){
 	// Control input u(t) buffer
 	char u_value[50] = {0,};			
 	int u_len;
+	// roundtrip buffer 
+	unsigned char roundtrip[50] = {0,};
+	int r_len;
+	char recordtrip[50] = {0,};
 	// State1 buffer (from plant)
 	char state1_val[50] = {0,};
 	// State2 buffer (from plant)			
@@ -106,6 +112,7 @@ int main(){
 	
 	unsigned int seq = 0;
 
+	double delay = 0;
 	// When simulation delay is more than threshold, Send a signal to the plant.
 	char delay_char[6] = "delay";	
 	
@@ -115,6 +122,8 @@ int main(){
 		printf("socket creation error\n");
 		exit(1);
 	}
+	// Check socket buffer
+	int remainSize;
 	memset(&server_addr,0, sizeof(server_addr));
 	server_addr.sin_family		= AF_INET;
 	server_addr.sin_port		= htons(4000);
@@ -134,22 +143,28 @@ int main(){
 	*/
 
 	while(1){
+		// check remain buffer
+		// if (ioctl(sock, SIOCOUTQ, &remainSize) >= 0){
+		// 		printf("remain buffer data: %d\n", remainSize);
+		// 	}
 		client_addr_size = sizeof(client_addr);
-		// Wait the control input signal.
-		len = recvfrom(sock, buff_rcv, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, &client_addr_size);	
-		// Measure time
-		GET_TIME(&time_val);
-		// update past time
-		past = now;
-		// Save now time
-		now = time_val;
+		// Wait input signal. (control or roundtrip time)
+		len = recvfrom(sock, buff_rcv, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, &client_addr_size);
+
+		if(strcmp(buff_rcv, recordtrip) == 0){
+			// update past time
+			GET_TIME(&time_val);
+			now = time_val;
+			delay = ELAPS_TIME(now, past);
+			}
+		
 		// If the controller receive the kill signal from the physical system, controller must shut down the program. 
 		if(!strncmp(buff_rcv,"kill", 4)){
 			printf("%s\n",buff_rcv);
 			break;
 		}
 		// When the controller receive the packet,
-		if(len > 0){
+		if(buff_rcv[0] == STX){
 			int check = 0;
 			int len1 = 0;
 			if(buff_rcv[HEADERLEN-1] == SENSOR){
@@ -175,18 +190,24 @@ int main(){
 			}
 			// Calculate the control input u(t)
 			u = -K1 * x1 - K2 * x2 + UC;
-			
+			sprintf(roundtrip, "!%.1lf", sim_time * SAMPLING_PERIOD);
+			sendto(sock, roundtrip, strlen(roundtrip) + 1, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
+			GET_TIME(&time_val);
+			// Save now time
+			past = time_val;
+			memcpy(recordtrip, roundtrip, sizeof(roundtrip));
 			// Write the log (Time, y(t), u(t), r(t) -> Residual)
 			// If delay is more than 10s, do not log
-			if (ELAPS_TIME(now, past) < 10.0){
-				enqueue(&delay_queue, ELAPS_TIME(now, past));
-				printf("time: %lf\t u(t): %lf\t delay(s): %f\t x1(t): %f\t x2(t): %f delay sum: %f\n", 
-					(sim_time - 1) * SAMPLING_PERIOD, u, ELAPS_TIME(now, past), x1, x2, sum_queue(&delay_queue));
-				sprintf(log_message,"%lf\t%lf\t%f\n", (sim_time - 1) * SAMPLING_PERIOD, u, ELAPS_TIME(now, past));
+			if (delay < 10.0){
+				enqueue(&delay_queue, delay * 1000);
+				printf("time(s): %10lf  u(t): %10lf  delay(ms): %10f x1(t): %10f  x2(t): %10f delay sum: %10f\n", 
+					(sim_time) * SAMPLING_PERIOD, u, delay * 1000, 
+					x1, x2, sum_queue(&delay_queue));
+				sprintf(log_message,"%lf\t%lf\t%f\n", (sim_time) * SAMPLING_PERIOD, u, delay);
 				write(fd,log_message, strlen(log_message));
 			}
 			
-			// if delay sum is more than 2.0 seconds
+			// if delay sum is more than THREHOLD
 			if (sum_queue(&delay_queue) >= THREHOLD){
 				// Send delay signal to controller.
 				sendto(sock, delay_char, strlen(delay_char) + 1, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 

@@ -14,7 +14,7 @@
 #define MSEC 1
 
 // Controller IP address : 127.0.0.1	192.168.0.6
-#define IP_ADDR "192.168.0.6"
+#define IP_ADDR "127.0.0.1"
 
 // Declare
 void timer();
@@ -83,6 +83,7 @@ char ap_val = {1};
 // check which handover is made.
 char handover_check = {0};
 
+
 // timer var, second, ms
 int createTimer(timer_t *timerID, int sec, int msec)  
 {  
@@ -148,14 +149,14 @@ void timer()
 	int sensing_period = (int) (SAMPLING_PERIOD * 1000);
 	
 	// ========================== Disturbance Code ===========================================
-	if(sim_time > *(plant.disturbance_time) && sim_time < *(plant.disturbance_time) + SAMPLING_PERIOD){ 
-		// Inflict the disturbance during SAMPLING_PERIOD
-		*(plant.u) += *(plant.disturbance_value);	
-	}
+	// if(sim_time > *(plant.disturbance_time) && sim_time < *(plant.disturbance_time) + SAMPLING_PERIOD){ 
+	// 	// Inflict the disturbance during SAMPLING_PERIOD
+	// 	*(plant.u) += *(plant.disturbance_value);	
+	// }
 	// ========================== Disturbance Code ===========================================
 
 	// ========================== Physical system State Update Code ==========================
-	// Time update (1ms).
+	// update period every 1us ).
 	printf("t: %lf\t", sim_time); 
 	sim_time = sim_time + (MSEC * 0.001);	
 	sim_count = sim_count + 1;				
@@ -209,7 +210,6 @@ void timer()
 	write(fd,log_message, strlen(log_message));
 }
 
-
 // Main fuction
 int main(int argc, char* argv[]){
 	printf("Start Plant\n");
@@ -258,15 +258,14 @@ int main(int argc, char* argv[]){
 	// Set Reference signal					
 	double ref = 0.5;	plant.ref_signal = &ref;										
 	// ===================================== Plant Setting =======================================
-
-	// ===================================== Network Setting =====================================
+	
 	// Receive buffer : Store packets received from the controller
 	char buff_rcv[BUFFER_SIZE];
 	// buffer for control input signal u(t) in packet
 	char actuator_val[BUFFER_SIZE]={0,};
 	// When simulation finish, plant sends end_char to controller. Then, the controller process should be finished. 
-	char end_char[5] = "kill";			
-
+	char end_char[5] = "kill";		
+	// ===================================== Network Setting =====================================
 	// UDP socket programming(Domain, Type, Protocol)
 	// Domain : PF_INET (IPv4)
 	// SOCK_DGRAM : UDP,  SOCK_STREAM  : TCP,  SOCK_RAW : User_Defined
@@ -310,6 +309,10 @@ int main(int argc, char* argv[]){
 	while(sim_time < sim_end){ 
 		// Wait the enter of control input u(t).
 		message_len = recvfrom(sock, buff_rcv, BUFFER_SIZE, 0, (struct sockaddr*) & client_addr, &client_addr_size);
+		// echo roundtrip signal to server
+		if(!strncmp(buff_rcv, "!", 1)){
+			sendto(sock, buff_rcv, strlen(buff_rcv)+1, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)); 
+		}
 		if(!strncmp(buff_rcv, "delay", 5)){
 			ap_val = 0;
 			handover_check = handover_check + 1;
