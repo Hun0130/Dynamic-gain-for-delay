@@ -1,6 +1,6 @@
 CC=gcc
 
-all: controller.out plant.out
+all: controller.out plant.out attacker.out
 
 
 plant.out: plant.o matrix.o log_manager.o udp_protocol.o
@@ -8,6 +8,9 @@ plant.out: plant.o matrix.o log_manager.o udp_protocol.o
 
 controller.out: controller.o matrix.o log_manager.o udp_protocol.o queue.o
 	gcc -o controller.out controller.o matrix.o udp_protocol.o log_manager.o queue.o
+
+attacker.out: attacker.o
+	gcc -o attacker.out attacker.o -lrt
 
 controller.o: matrix.h udp_protocol.h log_manager.h queue.h controller.c
 	gcc -c -o controller.o controller.c
@@ -26,6 +29,9 @@ log_manager.o: log_manager.h log_manager.c
 
 queue.o : queue.h queue.c
 	gcc -c -o queue.o queue.c
+
+attacker.o : attacker.c
+	gcc -c -o attacker.o attacker.c -lrt
 
 clean: 
 	rm -f *.o

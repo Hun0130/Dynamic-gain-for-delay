@@ -13,16 +13,18 @@ struct timeval past; struct timeval now;
 struct timeval time_val;
 
 // u = -Kx + U_c
-#define UC 0
+double UC = 0.9 * 0.0174533;
+
+// Controller gain
+// 0.0659, -0.0583
+// delay mode : 0.75, 0.012
+double K1 = 0.75;
+double K2 = 0.012;
 
 #define AP_NUM 1
 
-// THREHOLD (ms)
-#define THREHOLD 1000
-
-// Controller gain
-#define K1 0.0659
-#define K2 -0.0583
+// THREHOLD (ms) 
+#define THREHOLD 160
 
 // delay Queue size: 5
 QueueType delay_queue;
@@ -79,6 +81,9 @@ int main(){
 	char file_name[256];
 	char log_message[256];
 	Make_file_name("controller",file_name);
+
+	// check for gain change
+	int delay_check = 0;
 
 	if(0 > (fd = open(file_name,O_WRONLY|O_CREAT|O_EXCL,0644))){
 		perror("File open error\n");
@@ -203,16 +208,29 @@ int main(){
 				printf("time(s): %10lf  u(t): %10lf  delay(ms): %10f x1(t): %10f  x2(t): %10f delay sum: %10f\n", 
 					(sim_time) * SAMPLING_PERIOD, u, delay * 1000, 
 					x1, x2, sum_queue(&delay_queue));
-				sprintf(log_message,"%lf\t%lf\t%f\n", (sim_time) * SAMPLING_PERIOD, u, delay);
+				sprintf(log_message,"%lf\t%lf\t%f\t%d\n", (sim_time) * SAMPLING_PERIOD, u, delay, delay_check);
 				write(fd,log_message, strlen(log_message));
 			}
 			
 			// if delay sum is more than THREHOLD
 			if (sum_queue(&delay_queue) >= THREHOLD){
-				// Send delay signal to controller.
-				sendto(sock, delay_char, strlen(delay_char) + 1, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
-				printf("delay cut");
-				break;
+				if (delay_check != 1){
+					// ============== For Handover ==================
+					// Send delay signal to controller.
+					sendto(sock, delay_char, strlen(delay_char) + 1, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
+					// ==============================================
+					// ============== For Gain Tuning ===============
+					// 0.75, 0.012
+					// K1 = 0.63;
+					// K2 = 0.0025;
+					//K1 = 0.9;
+					//K2 = 0.007;
+					// UC = 0.75 * 0.0174533;
+					// ==============================================
+					printf("Delay has been detected.\n ");
+					delay_check = 1;
+					break;
+				}
 			}
 
 			// Transform control input u(t) from (double) to char[]

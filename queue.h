@@ -5,7 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
-# define MAX_QUEUE_SIZE 5
+# define MAX_QUEUE_SIZE 3
 
 typedef struct QueueType{
 	double element_data[MAX_QUEUE_SIZE];

@@ -8,13 +8,20 @@
 
 // port number of server
 #define SERVER_PORT 4000
+#define ATTACK_PORT 4000
 // period (s)
 #define SEC 0
 // period (ms)
 #define MSEC 1
 
-// Controller IP address : 127.0.0.1	192.168.0.6
-#define IP_ADDR "127.0.0.1"
+// Controller IP address : 127.0.0.1	192.168.0.6  192.168.1.2
+#define IP_ADDR "192.168.1.2"
+#define ATTACK_ADDR "192.168.1.5"
+
+// attack start time(ms)
+#define ATTACK_START_TIME 4000
+// attack intensity : 1 = low, 2 = high
+char ATTACK_INTENSITY[1] = {'1'};
 
 // Declare
 void timer();
@@ -71,8 +78,8 @@ int sim_count = 1;
 unsigned int packet_seq = 0;
 
 // socket programming
-struct sockaddr_in server_addr, client_addr;	
-int sock, server_addr_size, client_addr_size;
+struct sockaddr_in server_addr, client_addr, attack_addr;	
+int sock, sock2 ,server_addr_size, client_addr_size;
 
 // File descriptor to make log file
 int fd;					
@@ -175,7 +182,14 @@ void timer()
 	// Calculate the IAE.							
 	*(plant.IAE) += abs_double(*(plant.ref_signal)-*(plant.y)) * 0.001;						
 	// ========================== Physical system State Update Code ==========================
-
+	if((sim_count / ATTACK_START_TIME) == 1){
+		if (ATTACK_INTENSITY[0] == '1'){
+			sendto(sock2, ATTACK_INTENSITY, strlen(ATTACK_INTENSITY) + 1, 0, (struct sockaddr*) & attack_addr, sizeof(attack_addr));
+		}
+		if (ATTACK_INTENSITY[0] == '2'){
+			sendto(sock2, ATTACK_INTENSITY, strlen(ATTACK_INTENSITY) + 1, 0, (struct sockaddr*) & attack_addr, sizeof(attack_addr));
+		}
+	}
 	// Sampling and transmiting the sensor output y(t) to controller. (Every 2s)
 	if((sim_count % sensing_period) == 0){
 		// origin : len = sprintf(sensor_value, "%lf", *(plant.y)); (Transform sensor output from (double) to char[].)
@@ -272,8 +286,16 @@ int main(int argc, char* argv[]){
 	// protoco : 0 (auto), IPPROTO_TCP, IPPROTO_UDP
 	sock = socket(PF_INET, SOCK_DGRAM, 0);
 
+	sock2 = socket(PF_INET, SOCK_DGRAM, 0);
+
 	// socket return -1 : error
 	if(sock == -1){
+		printf("socket creation error\n");
+		exit(1);
+	}
+
+	// socket return -1 : error
+	if(sock2 == -1){
 		printf("socket creation error\n");
 		exit(1);
 	}
@@ -287,6 +309,11 @@ int main(int argc, char* argv[]){
 	server_addr.sin_port = htons(SERVER_PORT);	
 	// controller 32bit IPv4 address : 127.0.0.1	192.168.0.6
 	server_addr.sin_addr.s_addr	= inet_addr(IP_ADDR);
+
+	memset(&attack_addr, 0, sizeof(attack_addr));
+	attack_addr.sin_family = AF_INET;
+	attack_addr.sin_port = htons(ATTACK_PORT);
+	attack_addr.sin_addr.s_addr = inet_addr(ATTACK_ADDR);
 	// ===================================== Network Setting =====================================
 	
 	// ===================================== Logging Setting =====================================
@@ -318,6 +345,7 @@ int main(int argc, char* argv[]){
 			handover_check = handover_check + 1;
 			// Horizontal handover to "OpenWrt"
 			int ret = system("sudo nmcli device wifi connect OpenWrt");
+			memset(buff_rcv, '\0', sizeof(buff_rcv));
 		}
 		// If entered packet is actuator packet.
 		if(message_len > 0 || buff_rcv[HEADERLEN - 1] == ACTUATOR){	
@@ -341,6 +369,7 @@ int main(int argc, char* argv[]){
 	sendto(sock, end_char, strlen(end_char)+1, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)); 
 	// Close the socket.
 	close(sock);
+	close(sock2);
 
 	// Return the memory for physical system
 	Matrix_free(sysA); Matrix_free(sysB);  Matrix_free(sysC);  Matrix_free(x);

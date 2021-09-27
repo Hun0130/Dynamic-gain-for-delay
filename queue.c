@@ -51,6 +51,7 @@ double sum_queue(QueueType *q) {
 					break;
 			} while (i != q->front);
 		}
+	return_val = return_val / MAX_QUEUE_SIZE;
         return return_val;
 	}
 }
